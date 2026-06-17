@@ -7,8 +7,12 @@ from configs.config import PR_BUNDLES_DIR
 from schemas.pr_schema import (
     BudgetCheck,
     BudgetResult,
+    ClassificationSource,
     ExtractedField,
     ExtractedPR,
+    LLMFallbackTrace,
+    PRType,
+    PRTypeClassification,
     VendorMatch,
     VendorMatchResult,
 )
@@ -98,3 +102,50 @@ def test_vendor_match_serializes_enum_as_string():
     data = json.loads(vm.model_dump_json())
     assert data["result"] == "matched"
     assert isinstance(data["result"], str)
+
+
+def test_extracted_pr_llm_fields_default_off():
+    pr = _sample_extracted_pr()
+    assert pr.llm_fallback_used is False
+    assert pr.llm_normalized_candidate is None
+    data = json.loads(pr.model_dump_json())
+    assert data["llm_fallback_used"] is False
+    assert data["llm_normalized_candidate"] is None
+
+
+def test_pr_type_classification_serializes_enums_as_strings():
+    c = PRTypeClassification(
+        pr_type=PRType.EMERGENCY,
+        source=ClassificationSource.METADATA,
+        confidence=0.95,
+    )
+    data = json.loads(c.model_dump_json())
+    assert data["pr_type"] == "emergency"
+    assert data["source"] == "metadata"
+    assert isinstance(data["pr_type"], str) and isinstance(data["source"], str)
+    assert data["llm_fallback_used"] is False  # default
+
+
+def test_pr_type_confidence_bounds():
+    with pytest.raises(ValidationError):
+        PRTypeClassification(pr_type=PRType.STANDARD,
+                             source=ClassificationSource.METADATA, confidence=1.5)
+
+
+def test_llm_fallback_trace_shape():
+    t = LLMFallbackTrace(
+        source_agent="Agent A",
+        fallback_type="pr_type_classification",
+        used=True,
+        reason="metadata insufficient to classify PR type",
+        confidence=0.7,
+        model="claude-x",
+        prompt_version="v1",
+        normalized_candidate="emergency",
+        original_evidence="context_packet.json",
+    )
+    data = json.loads(t.model_dump_json())
+    assert data["used"] is True
+    assert data["fallback_type"] == "pr_type_classification"
+    assert data["normalized_candidate"] == "emergency"
+    assert data["original_evidence"] == "context_packet.json"
