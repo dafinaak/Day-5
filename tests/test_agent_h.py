@@ -91,3 +91,64 @@ def test_findings_deduplicated_and_artifacts_written(tmp_path):
     keys = [(f["finding_type"], f["message"]) for f in data["findings"]]
     assert len(keys) == len(set(keys))  # no duplicates after merge
     assert data["final_decision"] == "exception"
+
+
+# ---------- Task 28: PO draft, audit log, metrics, run summary ----------
+def test_po_draft_ready_for_clean(tmp_path):
+    _ares, res = _run_all("pr_bundle_001", tmp_path)
+    data = json.loads(res.po_draft_path.read_text(encoding="utf-8"))
+    assert data["po_status"] == "ready_for_posting"
+    assert data["final_decision"] == "auto_po"
+    assert data["vendor_name"] == "Gjirafa Mall"
+    assert data["estimated_amount"] == 450.0
+
+
+def test_po_draft_blocked_on_budget(tmp_path):
+    _ares, res = _run_all("scenario_04_budget_exhausted", tmp_path)
+    data = json.loads(res.po_draft_path.read_text(encoding="utf-8"))
+    assert data["po_status"] == "blocked"
+
+
+def test_metrics_has_input_hash_and_idempotency(tmp_path):
+    ares, res = _run_all("pr_bundle_001", tmp_path)
+    data = json.loads(res.metrics_path.read_text(encoding="utf-8"))
+    assert data["idempotency_check"] == "passed"
+    assert data["input_hash"] == ares.input_hash
+    assert len(data["input_hash"]) == 64
+    assert data["final_decision"] == "auto_po"
+
+
+def test_run_summary_columns_and_values(tmp_path):
+    import csv
+    from artifact_store import RUN_SUMMARY_COLUMNS
+    _ares, res = _run_all("pr_bundle_001", tmp_path)
+    with res.run_summary_path.open(encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames == RUN_SUMMARY_COLUMNS
+        row = next(reader)
+    assert row["pr_id"] == "PR-2026-001"
+    assert row["cost_center"] == "CC-IT-001"
+    assert row["vendor_name"] == "Gjirafa Mall"
+    assert row["final_decision"] == "auto_po"
+    assert row["idempotency_check"] == "passed"
+
+
+def test_audit_log_written(tmp_path):
+    ares, res = _run_all("pr_bundle_001", tmp_path)
+    text = res.audit_log_path.read_text(encoding="utf-8")
+    assert "Audit Log" in text
+    assert ares.input_hash in text
+    assert "auto_po" in text
+
+
+def test_all_mandatory_artifacts_present(tmp_path):
+    ares, _res = _run_all("pr_bundle_001", tmp_path)
+    expected = [
+        "context_packet.json", "evidence_index.json", "extracted_pr.json",
+        "budget_check.json", "vendor_match.json", "policy_check.json",
+        "sole_source_check.json", "bid_threshold_check.json", "anomaly_report.json",
+        "exceptions.md", "approval_packet.json", "po_draft.json",
+        "audit_log.md", "metrics.json", "run_summary.csv",
+    ]
+    for name in expected:
+        assert (ares.run_dir / name).exists(), f"missing artifact: {name}"
