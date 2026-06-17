@@ -1,0 +1,200 @@
+"""Agent H - Exception Triage & Lead Orchestration (IPRMS).
+
+Final decision layer (plani.pdf §6). Reads all upstream artifacts, merges and
+deduplicates findings, categorises exceptions, and makes the final DETERMINISTIC
+decision using artifact result fields + policy_pack.yaml. LLM output never decides
+approval/blocking/routing/PO posting (§4.1/§12).
+
+Task 27 outputs: exceptions.md, approval_packet.json.
+(po_draft.json, audit_log.md, metrics.json, run_summary.csv are added in Task 28.)
+"""
+from __future__ import annotations
+
+import json
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+_REPO_ROOT = str(Path(__file__).resolve().parents[1])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from agents.agent_a_intake_context import AgentAResult
+from artifact_store import ArtifactStore
+from configs.config import POLICY_PACK
+from schemas.decision_schema import ApprovalPacket, FinalDecision
+from schemas.finding_schema import Finding
+
+SOURCE_AGENT = "Agent H"
+_SEV_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+
+
+@dataclass
+class AgentHResult:
+    approval_packet: ApprovalPacket
+    approval_packet_path: Path
+    exceptions_path: Path
+    findings: List[Finding] = field(default_factory=list)
+
+
+def _field_value(data: Dict[str, Any], key: str) -> Any:
+    f = data.get(key)
+    return f.get("value") if isinstance(f, dict) else f
+
+
+def _merge_and_dedup(raw_findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deduplicate by (finding_type, message); combine evidence; keep max severity."""
+    merged: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    for f in raw_findings:
+        key = (str(f.get("finding_type", "")).strip().upper(),
+               str(f.get("message", "")).strip().lower())
+        if key not in merged:
+            merged[key] = dict(f)
+            merged[key]["evidence"] = list(f.get("evidence", []))
+        else:
+            existing = merged[key]
+            for ev in f.get("evidence", []):
+                if ev not in existing["evidence"]:
+                    existing["evidence"].append(ev)
+            if _SEV_RANK.get(f.get("severity"), 0) > _SEV_RANK.get(existing.get("severity"), 0):
+                existing["severity"] = f.get("severity")
+    return list(merged.values())
+
+
+def run(ares: AgentAResult, *, policy: Optional[Dict[str, Any]] = None) -> AgentHResult:
+    run_dir = ares.run_dir
+
+    def _load(name: str) -> Dict[str, Any]:
+        p = run_dir / name
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+    extracted = _load("extracted_pr.json")
+    context = _load("context_packet.json")
+    budget = _load("budget_check.json")
+    vendor = _load("vendor_match.json")
+    pol = _load("policy_check.json")
+    sole = _load("sole_source_check.json")
+    bid = _load("bid_threshold_check.json")
+    anomaly = _load("anomaly_report.json")
+
+    if policy is None:
+        import yaml
+        policy = yaml.safe_load(Path(POLICY_PACK).read_text(encoding="utf-8")) or {}
+    routing = policy.get("routing", {})
+    conf_min = float(policy.get("tolerances", {}).get("extraction_confidence_minimum", 0.85))
+
+    pr_id = _field_value(extracted, "pr_id") or context.get("bundle_id", "")
+    amount = extracted.get("estimated_amount", {})
+    amount = amount.get("value") if isinstance(amount, dict) else 0
+    confidence_score = float(extracted.get("confidence_score", 1.0))
+    manager_limit = float(policy.get("approval_thresholds", {}).get("manager_limit", 1000))
+
+    # ---- Merge + dedup findings from every artifact ----
+    raw: List[Dict[str, Any]] = []
+    raw += context.get("initial_risk_flags", [])
+    for art in (budget, vendor, pol, sole, bid, anomaly):
+        raw += art.get("findings", [])
+    # Agent B findings are not persisted to an artifact; derive low-confidence here.
+    if confidence_score < conf_min and not any(
+        f.get("finding_type") == "LOW_CONFIDENCE_EXTRACTION" for f in raw
+    ):
+        raw.append({
+            "finding_id": "F-H-LC", "finding_type": "LOW_CONFIDENCE_EXTRACTION",
+            "severity": "medium", "confidence": 1.0,
+            "message": f"Extraction confidence {confidence_score} below minimum {conf_min}.",
+            "evidence": ["extracted_pr.json"], "source_agent": SOURCE_AGENT,
+            "recommended_action": "Route to manual review.", "status": "open",
+        })
+
+    merged = _merge_and_dedup(raw)
+    exceptions = [f for f in merged if _SEV_RANK.get(f.get("severity"), 0) >= _SEV_RANK["medium"]]
+    exception_count = len(exceptions)
+    highest_severity = "none"
+    if merged:
+        top = max(merged, key=lambda f: _SEV_RANK.get(f.get("severity"), 0))
+        highest_severity = top.get("severity", "none") if _SEV_RANK.get(top.get("severity"), 0) else "none"
+
+    # ---- Deterministic final decision (priority order) ----
+    budget_result = budget.get("result", "passed")
+    vendor_result = vendor.get("result", "matched")
+    ss_result = sole.get("result", "ok")
+    bid_exceeds = bool(bid.get("exceeds_threshold")) and not bool(bid.get("sufficient_bids"))
+    anomaly_split = bool(anomaly.get("split_order_detected"))
+    anomaly_any = bool(anomaly.get("anomaly_detected"))
+    compliance_violation = pol.get("compliance_status") == "violation"
+    manual_required = bool(pol.get("manual_approval_required"))
+    multi_currency = bool(pol.get("multi_currency_flag"))
+    approval_level = pol.get("approval_level_required", "")
+
+    if budget_result != "passed":
+        decision, routed_to = FinalDecision.BLOCKED, budget.get("routed_to") or routing.get("budget_exhausted", "FP&A")
+    elif confidence_score < conf_min:
+        decision, routed_to = FinalDecision.MANUAL_REVIEW, routing.get("low_confidence_extraction", "Manual Review")
+    elif vendor_result == "pricing_uncertain":
+        decision, routed_to = FinalDecision.BUYER_CLARIFICATION, "Buyer Clarification"
+    elif anomaly_split or anomaly_any:
+        decision, routed_to = FinalDecision.EXCEPTION, routing.get("split_order_detected", "Compliance")
+    elif ss_result == "emergency_sole_source":
+        decision, routed_to = FinalDecision.EXPEDITED_APPROVAL, routing.get("emergency_sole_source", "Expedited Approval")
+    elif bid_exceeds:
+        decision, routed_to = FinalDecision.MANUAL_APPROVAL, routing.get("non_preferred_vendor", "Procurement")
+    elif vendor_result == "not_approved" or compliance_violation:
+        decision, routed_to = FinalDecision.EXCEPTION, routing.get("non_preferred_vendor", "Procurement")
+    elif manual_required:
+        routed_to = "Procurement" if multi_currency else (approval_level or "Manager")
+        decision = FinalDecision.MANUAL_APPROVAL
+    else:
+        decision, routed_to = FinalDecision.AUTO_PO, None
+
+    po_status = "ready_for_posting" if decision == FinalDecision.AUTO_PO else "blocked"
+
+    complex_flags = {
+        "framework_agreement": bool(pol.get("framework_agreement_flag")),
+        "blanket_order": bool(pol.get("blanket_order_flag")),
+        "emergency_procurement": bool(pol.get("emergency_procurement_flag")),
+        "multi_currency": bool(pol.get("multi_currency_flag")),
+    }
+
+    findings_models = [Finding(**f) for f in merged]
+    summary = (f"{decision.value}: {exception_count} exception(s), "
+               f"highest severity {highest_severity}"
+               + (f", routed to {routed_to}" if routed_to else ""))
+
+    packet = ApprovalPacket(
+        run_id=ares.run_id,
+        pr_id=pr_id,
+        final_decision=decision,
+        routed_to=routed_to,
+        approval_level_required=approval_level,
+        po_status=po_status,
+        exception_count=exception_count,
+        highest_severity=highest_severity,
+        complex_flags=complex_flags,
+        summary=summary,
+        findings=findings_models,
+    )
+
+    # ---- exceptions.md ----
+    lines = [f"# Exceptions — {ares.run_id}", "", f"PR: {pr_id}", f"Decision: {decision.value}", ""]
+    if not exceptions:
+        lines.append("No critical exceptions.")
+    else:
+        for f in sorted(exceptions, key=lambda x: -_SEV_RANK.get(x.get("severity"), 0)):
+            lines.append(f"## [{str(f.get('severity', '')).upper()}] {f.get('finding_type', '')}")
+            lines.append(f.get("message", ""))
+            lines.append(f"- Evidence: {', '.join(f.get('evidence', [])) or 'n/a'}")
+            lines.append(f"- Source: {f.get('source_agent', '')}")
+            lines.append(f"- Recommended: {f.get('recommended_action', '')}")
+            lines.append("")
+
+    store = ArtifactStore(ares.run_id, root=run_dir.parent)
+    packet_path = store.write_json("approval_packet.json", packet.model_dump(mode="json"))
+    exceptions_path = store.write_markdown("exceptions.md", "\n".join(lines) + "\n")
+
+    return AgentHResult(
+        approval_packet=packet,
+        approval_packet_path=packet_path,
+        exceptions_path=exceptions_path,
+        findings=findings_models,
+    )
