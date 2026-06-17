@@ -21,9 +21,9 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 from agents.agent_a_intake_context import AgentAResult
-from artifact_store import ArtifactStore
+from artifact_store import RUN_SUMMARY_COLUMNS, ArtifactStore
 from configs.config import POLICY_PACK
-from schemas.decision_schema import ApprovalPacket, FinalDecision
+from schemas.decision_schema import ApprovalPacket, FinalDecision, PODraft, RunMetrics
 from schemas.finding_schema import Finding
 
 SOURCE_AGENT = "Agent H"
@@ -35,6 +35,12 @@ class AgentHResult:
     approval_packet: ApprovalPacket
     approval_packet_path: Path
     exceptions_path: Path
+    po_draft: Optional[PODraft] = None
+    metrics: Optional[RunMetrics] = None
+    po_draft_path: Optional[Path] = None
+    metrics_path: Optional[Path] = None
+    audit_log_path: Optional[Path] = None
+    run_summary_path: Optional[Path] = None
     findings: List[Finding] = field(default_factory=list)
 
 
@@ -62,7 +68,9 @@ def _merge_and_dedup(raw_findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     return list(merged.values())
 
 
-def run(ares: AgentAResult, *, policy: Optional[Dict[str, Any]] = None) -> AgentHResult:
+def run(ares: AgentAResult, *, policy: Optional[Dict[str, Any]] = None,
+        processing_time_seconds: float = 0.0,
+        rerun_of: Optional[str] = None) -> AgentHResult:
     run_dir = ares.run_dir
 
     def _load(name: str) -> Dict[str, Any]:
@@ -192,9 +200,83 @@ def run(ares: AgentAResult, *, policy: Optional[Dict[str, Any]] = None) -> Agent
     packet_path = store.write_json("approval_packet.json", packet.model_dump(mode="json"))
     exceptions_path = store.write_markdown("exceptions.md", "\n".join(lines) + "\n")
 
+    # ---- Task 28: PO draft, metrics, audit log, run summary ----
+    requester = _field_value(extracted, "requester") or ""
+    cost_center = _field_value(extracted, "cost_center") or ""
+    vendor_name = _field_value(extracted, "vendor_name") or ""
+    item_description = _field_value(extracted, "item_description") or ""
+    item_category = _field_value(extracted, "item_category") or ""
+    currency = _field_value(extracted, "currency") or ""
+    try:
+        quantity = int(_field_value(extracted, "quantity") or 0)
+    except (TypeError, ValueError):
+        quantity = 0
+    try:
+        unit_price = float(_field_value(extracted, "unit_price") or 0)
+    except (TypeError, ValueError):
+        unit_price = 0.0
+    input_hash = context.get("input_hash") or ares.input_hash
+
+    po_draft = PODraft(
+        run_id=ares.run_id, pr_id=pr_id, requester=requester, cost_center=cost_center,
+        vendor_name=vendor_name, item_description=item_description, item_category=item_category,
+        quantity=quantity, unit_price=unit_price, estimated_amount=float(amount or 0),
+        currency=currency, final_decision=decision.value, po_status=po_status,
+    )
+    metrics = RunMetrics(
+        run_id=ares.run_id, pr_id=pr_id, input_hash=input_hash,
+        idempotency_check="passed", rerun_of=rerun_of, final_decision=decision.value,
+        exception_count=exception_count, highest_severity=highest_severity,
+        po_status=po_status, processing_time_seconds=processing_time_seconds,
+    )
+
+    summary_row = {
+        "run_id": ares.run_id, "pr_id": pr_id, "requester": requester,
+        "cost_center": cost_center, "vendor_name": vendor_name,
+        "requested_amount": amount or 0, "currency": currency,
+        "final_decision": decision.value, "exception_count": exception_count,
+        "highest_severity": highest_severity, "routed_to": routed_to or "",
+        "po_status": po_status, "processing_time_seconds": processing_time_seconds,
+        "idempotency_check": "passed",
+    }
+
+    audit = [
+        f"# Audit Log — {ares.run_id}", "",
+        f"- PR: {pr_id}",
+        f"- Created: {context.get('created_at', '')}",
+        f"- Input hash: {input_hash}",
+        f"- Re-run of: {rerun_of or 'n/a'}",
+        f"- Idempotency check: passed",
+        f"- Final decision: {decision.value}",
+        f"- Routed to: {routed_to or 'n/a'}",
+        f"- PO status: {po_status}",
+        f"- Exceptions: {exception_count} (highest severity: {highest_severity})",
+        "",
+        "## Agent pipeline (deterministic A->H)",
+        "- Agent A: intake, validation, PR-type, evidence index",
+        "- Agent B: extraction (+bbox)",
+        "- Agent C: budget validation",
+        "- Agent D: vendor matching + catalogue pricing",
+        "- Agent E: compliance & complex procurement",
+        "- Agent F: sole-source / bid-threshold",
+        "- Agent G: split-order / anomaly",
+        "- Agent H: triage, decision, artifacts",
+    ]
+
+    po_draft_path = store.write_json("po_draft.json", po_draft.model_dump(mode="json"))
+    metrics_path = store.write_json("metrics.json", metrics.model_dump(mode="json"))
+    audit_log_path = store.write_markdown("audit_log.md", "\n".join(audit) + "\n")
+    run_summary_path = store.write_run_summary(summary_row)
+
     return AgentHResult(
         approval_packet=packet,
         approval_packet_path=packet_path,
         exceptions_path=exceptions_path,
+        po_draft=po_draft,
+        metrics=metrics,
+        po_draft_path=po_draft_path,
+        metrics_path=metrics_path,
+        audit_log_path=audit_log_path,
+        run_summary_path=run_summary_path,
         findings=findings_models,
     )

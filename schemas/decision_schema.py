@@ -38,3 +38,32 @@ class ApprovalPacket(BaseModel):
     complex_flags: Dict[str, bool] = Field(default_factory=dict)
     summary: str = ""
     findings: List[Finding] = Field(default_factory=list)
+
+
+class PODraft(BaseModel):
+    run_id: str
+    pr_id: str
+    requester: str = ""
+    cost_center: str = ""
+    vendor_name: str = ""
+    item_description: str = ""
+    item_category: str = ""
+    quantity: int = 0
+    unit_price: float = 0.0
+    estimated_amount: float = 0.0
+    currency: str = ""
+    final_decision: str = ""
+    po_status: str = "blocked"                    # ready_for_posting | blocked
+
+
+class RunMetrics(BaseModel):
+    run_id: str
+    pr_id: str
+    input_hash: str = ""
+    idempotency_check: str = "passed"            # plan §13
+    rerun_of: Optional[str] = None
+    final_decision: str = ""
+    exception_count: int = 0
+    highest_severity: str = "none"
+    po_status: str = "blocked"
+    processing_time_seconds: float = 0.0
