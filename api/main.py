@@ -1,17 +1,3 @@
-"""FastAPI app for IPRMS (plan §11, Task 9).
-
-Exposes endpoints that trigger the local deterministic Python pipeline
-(pipelines/run_iprms_pipeline.py) and read the generated artifacts from
-runs/<run_id>/. No cloud services — everything is local file-based.
-
-Endpoints:
-  POST /run-pr                  -> run a PR bundle, return run_id + decision
-  GET  /runs/{run_id}           -> run context + decision summary
-  GET  /runs/{run_id}/decision  -> approval_packet.json (final decision)
-  GET  /runs/{run_id}/artifacts -> list of artifacts in the run dir
-  GET  /runs/{run_id}/summary   -> run_summary.csv row + metrics.json
-  GET  /metrics                 -> aggregate metrics across all runs
-"""
 from __future__ import annotations
 
 import json
