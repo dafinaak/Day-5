@@ -1,16 +1,3 @@
-"""PR input reader for IPRMS.
-
-Reads a requisition in any supported form — JSON, digital PDF, scanned PDF, or
-web-form payload — and normalises it into a single ReaderResult that carries raw
-text and evidence metadata (page + word bounding boxes) for Agent B.
-
-Standalone: uses local PyMuPDF/pdfplumber parsing and a local OCR engine
-(pytesseract). No cloud document-intelligence service is used.
-
-Separation of concerns: Agent A detects the input type (from the manifest) and
-passes it in; this reader only reads. The single exception is the auto-fallback
-of a text-less "pdf" to scanned_pdf, which is a reading detail, not type detection.
-"""
 from __future__ import annotations
 
 import io

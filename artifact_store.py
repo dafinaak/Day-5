@@ -1,10 +1,3 @@
-"""Local run-artifact storage for IPRMS.
-
-Every run writes its artifacts under runs/<run_id>/ as JSON, Markdown and CSV.
-This module centralises path resolution and writing so all agents (A–H) and the
-pipeline use one consistent storage layout. See plani.pdf §7 for the mandatory
-artifact list.
-"""
 from __future__ import annotations
 
 import csv

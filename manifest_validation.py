@@ -1,8 +1,3 @@
-"""Manifest validation for IPRMS PR bundles.
-
-Reads a bundle's manifest.yaml and verifies the bundle is complete BEFORE the
-pipeline runs, so invalid bundles are blocked at the gate (Agent A) and by the API.
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
