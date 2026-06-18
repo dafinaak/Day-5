@@ -1,13 +1,3 @@
-"""Official IPRMS pipeline runner (plan §10, Task 7).
-
-Executes the full deterministic 8-agent sequence locally, in order:
-    Agent A -> B -> C -> D -> E -> F -> G -> H  (+ ERP/tracker stub)
-
-This direct Python path is the OFFICIAL execution flow. An optional LangGraph
-skeleton (graph/workflow.py) wraps the same deterministic functions for
-flow/state/audit; its output must match this direct path for the same input and
-config (verified by parity tests). The project runs fully without LangGraph.
-"""
 from __future__ import annotations
 
 import json

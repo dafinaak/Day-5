@@ -1,12 +1,3 @@
-"""Agent B extraction fallback (controlled LLM, plan §4.1).
-
-Used ONLY when an item description is vague or OCR/PDF extraction is unclear. The
-LLM may only produce a normalized *candidate* value; the original parser/OCR value
-and confidence remain the source of truth and the candidate never decides routing.
-
-Deterministic-safe: returns None when the fallback is disabled (default) or when
-no model/credentials are configured.
-"""
 from __future__ import annotations
 
 import os

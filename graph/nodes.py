@@ -1,10 +1,3 @@
-"""LangGraph nodes for the IPRMS A->H pipeline skeleton.
-
-Each node wraps a DETERMINISTIC agent function — no business logic lives here.
-The intake node creates the shared AgentAResult; every later node runs its agent
-against that same run directory. Output is therefore identical to the direct
-Python pipeline (parity).
-"""
 from __future__ import annotations
 
 import sys

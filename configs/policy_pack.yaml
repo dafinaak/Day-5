@@ -1,9 +1,3 @@
-# IPRMS — Policy Pack
-# Configurable procurement rules. Editing this file changes system behaviour
-# WITHOUT touching agent code. Consumed by Agent E, F, G and H.
-# (See plani.pdf §4 for the canonical schema.)
-
-# --- Approval thresholds (EUR) — Agent E ---
 approval_thresholds:
   manager_limit: 1000
   finance_limit: 5000

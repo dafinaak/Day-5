@@ -1,9 +1,3 @@
-"""Prompt templates for the controlled LLM fallback (IPRMS, plan §4.1).
-
-These prompts are used ONLY at the two allowed fallback points. They ask the
-model to return a single, constrained value (a PR-type label or a normalized
-item description) — never a decision.
-"""
 from __future__ import annotations
 
 PROMPT_VERSION = "v1"

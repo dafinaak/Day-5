@@ -1,10 +1,3 @@
-"""LLM fallback traceability for IPRMS (plan §4.1 / §7).
-
-Builds the LLMFallbackTrace record written to llm_fallback_trace.json whenever an
-Agent A or Agent B LLM fallback is used. Records whether fallback ran, the
-triggering reason, confidence, model/prompt version, the normalized candidate,
-and a pointer to the original parser/OCR/metadata evidence (the source of truth).
-"""
 from __future__ import annotations
 
 from typing import Optional

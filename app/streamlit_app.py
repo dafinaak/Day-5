@@ -1,15 +1,3 @@
-"""Streamlit demo UI for IPRMS (plan §11).
-
-Lets a user select a PR bundle / scenario, validate its manifest, run the local
-deterministic pipeline (optionally via the LangGraph skeleton), and view the
-final decision, approval packet, exceptions, PO draft, audit log, metrics, and
-run_summary.csv.
-
-Run with:  streamlit run app/streamlit_app.py
-
-The data-loading helpers are importable/testable without a Streamlit runtime;
-only main() touches st.* and is invoked when run as a script.
-"""
 from __future__ import annotations
 
 import csv

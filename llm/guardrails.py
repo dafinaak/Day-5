@@ -1,14 +1,3 @@
-"""Guardrails for the controlled LLM boundary (IPRMS, plan §4.1).
-
-LLM output is advisory only and NEVER drives a final decision. It is allowed at
-exactly two fallback points:
-  * Agent A — PR-type classification when metadata is insufficient.
-  * Agent B — vague item descriptions / unclear OCR-PDF extraction normalization.
-
-NOT allowed (always rule-based): budget validation, vendor approval/preferred,
-compliance decision, split-order/anomaly final decision, approval routing, and
-PO draft posting/blocking. Original parser/OCR/metadata evidence is always kept.
-"""
 from __future__ import annotations
 
 import os

@@ -1,11 +1,3 @@
-"""LangGraph workflow skeleton for the IPRMS A->H pipeline (Task 7).
-
-Builds a linear StateGraph A->B->C->D->E->F->G->H->ERP whose nodes call the
-deterministic agent functions. LangGraph provides only flow/state/audit
-structure; it never replaces business rules, and its artifacts are identical to
-the direct Python pipeline. The project still runs without LangGraph (the direct
-runner remains the official entrypoint).
-"""
 from __future__ import annotations
 
 import sys

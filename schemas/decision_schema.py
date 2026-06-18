@@ -1,10 +1,3 @@
-"""Final-decision schemas (IPRMS) — Agent H outputs.
-
-Holds the deterministic final-decision artifacts produced by Agent H
-(approval_packet.json now; po_draft / metrics extended in Task 28). Kept separate
-from extraction/matching (pr_schema) and compliance/risk (artifact_schema) per
-plan §3.
-"""
 from __future__ import annotations
 
 from enum import Enum

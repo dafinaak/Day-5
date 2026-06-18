@@ -1,9 +1,3 @@
-"""Central path configuration for IPRMS.
-
-Single source of truth for where repo-relative data and run artifacts live.
-All paths are resolved from this file's location, so they are correct no matter
-what the current working directory is when a command is launched.
-"""
 from __future__ import annotations
 
 from pathlib import Path
