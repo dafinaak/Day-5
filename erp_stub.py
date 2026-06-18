@@ -1,17 +1,3 @@
-"""ERP API stub + Jira/ADO tracker payload (IPRMS, plan §12).
-
-Simulates posting the generated PO draft to an ERP/procurement system and, when
-the PR has an exception, creates a tracker payload routed to the right team.
-
-ERP rule:
-  * clean PR (po_status == ready_for_posting) -> erp_status = simulated_post_success
-  * blocked PR (exceptions)                    -> erp_status = not_posted
-
-Tracker rule: only created when an exception exists (decision != auto_po/auto_approve),
-routed to FP&A / Procurement / Compliance / Manual Review (from approval_packet).
-
-No business decisions are made here — this only reflects Agent H's outcome.
-"""
 from __future__ import annotations
 
 import json
