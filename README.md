@@ -1,153 +1,381 @@
 # IPRMS — Intelligent Purchase Requisition Management System
 
-IPRMS is a standalone Python-based **8-agent purchase requisition management system**. It
-processes Purchase Requisition (PR) bundles, validates budget and vendor data, applies a
-configurable policy pack, detects procurement risks and anomalies, routes exceptions, and
-generates ERP-ready PO drafts with full JSON / Markdown / CSV audit artifacts.
+IPRMS is a **standalone, deterministic, Python-based 8-agent system** for processing Purchase
+Requisitions (PRs). For every PR bundle it validates budget and vendor data, applies a
+configurable **policy pack**, detects procurement risks and anomalies, routes exceptions, and
+generates ERP-ready PO drafts together with a full set of **JSON / Markdown / CSV audit
+artifacts**.
+
+The system runs entirely on a local machine (or a single Docker container). 
 
 > **Scope:** Purchase Requisition handling only. Invoice handling, invoice-to-PO matching, and
-> GRN matching are explicitly **out of scope**.
+> GRN (Goods Receipt Note) matching are explicitly
 
-## Technology decisions
+---
 
-- The official execution flow is a **deterministic Python pipeline** (`pipelines/run_iprms_pipeline.py`), run locally or in a standard container. **No cloud platform is required** for the core implementation.
-- Core business decisions are **deterministic** (Python / Pydantic / Pandas) to preserve idempotency. PySpark is optional, only for larger-scale local data processing.
-- **LangGraph** is optional, only as a lightweight internal wrapper for the Agent A→H sequence (it must not replace the deterministic Python pipeline runner).
-- **LangChain / LLM** is optional, only as an Agent B fallback for unclear extraction fields or vague item descriptions. It must **not** decide approval, blocking, routing, or PO posting.
-- The system must work even if LangGraph / LangChain are disabled.
+## Table of contents
 
-## The 8 agents
+1. [Quick start](#1-quick-start-for-the-mentor)
+2. [What the system does](#2-what-the-system-does)
+3. [Prerequisites](#3-prerequisites)
+4. [Installation](#4-installation)
+5. [Running the pipeline (CLI)](#5-running-the-pipeline-cli)
+6. [Running the demo UI (Streamlit)](#6-running-the-demo-ui-streamlit)
+7. [Running the API (FastAPI)](#7-running-the-api-fastapi)
+8. [Running with Docker (optional)](#8-running-with-docker-optional)
+9. [Running the tests](#9-running-the-tests)
+10. [Built-in demo scenarios](#10-built-in-demo-scenarios)
+11. [Run artifacts](#11-run-artifacts)
+12. [Configuration — the single source of truth](#12-configuration--the-single-source-of-truth)
+13. [Architecture & design guarantees](#13-architecture--design-guarantees)
+14. [Repository structure](#14-repository-structure)
+15. [Team](#15-team)
 
-| Agent | Responsibility | Key output(s) |
-|-------|----------------|---------------|
-| A | Intake & Context / Gatekeeper | `context_packet.json`, `evidence_index.json` |
-| B | Item / PR Extraction | `extracted_pr.json` |
-| C | Budget Validation | `budget_check.json` |
-| D | Vendor Matching | `vendor_match.json` |
-| E | Compliance & Policy | `policy_check.json` |
-| F | Sole-source / Bid-threshold | `sole_source_check.json`, `bid_threshold_check.json` |
-| G | Split-order / Anomaly Detection | `anomaly_report.json` |
-| H | Exception Triage & Lead Orchestration | `exceptions.md`, `approval_packet.json`, `po_draft.json`, `audit_log.md`, `metrics.json`, `run_summary.csv` |
+---
 
-## Repository structure
+## 1. Quick start
 
-```
-iprms-intelligent-purchase-requisition/
-├── agents/        # Agent A–H implementations
-├── configs/       # policy_pack.yaml, tolerance_settings.json, routing_rules.json
-├── data/          # pr_bundles/ (with manifest.yaml) and sample_prs/
-├── notebooks/     # local run/demo scripts (01_run_pipeline.py, 02_demo_dashboard.py)
-├── pipelines/     # run_iprms_pipeline.py — deterministic A→H pipeline
-├── graph/         # optional LangGraph wrapper (state.py, workflow.py)
-├── llm/           # optional Agent B LangChain/LLM fallback (prompts.py, extraction_fallback.py)
-├── schemas/       # Pydantic schemas (pr, artifact, finding, decision)
-├── runs/          # per-run output: runs/<run_id>/ artifacts
-├── tests/         # pytest scenario tests
-├── api/           # FastAPI app (main.py)
-├── app/           # Streamlit demo app
-├── Dockerfile     # optional, for a local/containerized demo
-└── requirements.txt
-```
-
-## Getting started (local setup)
-
-> Requires Python 3.11+ (verified on 3.14). No cloud account needed.
+A reviewer can verify the project with the following commands from the repository root:
 
 ```bash
-# 1. Create & activate a virtual environment
+
 python -m venv .venv
-# Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-# macOS / Linux:
-source .venv/bin/activate
+.venv\Scripts\Activate.ps1                  
 
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. (Optional) configure local environment
-#    Only needed for the optional LLM fallback or scanned-PDF OCR.
-cp .env.example .env        # Windows: copy .env.example .env
+# 3. Run the full test suite (expect: 170 passed)
+pytest -q
+
+# 4. Launch the interactive demo UI
+streamlit run app/streamlit_app.py
+```
+
+The Streamlit UI opens in the browser. Pick any bundle/scenario from the dropdown, click
+**Run pipeline**, and inspect the decision, approval packet, exceptions, PO draft, audit log,
+metrics and all generated artifacts. Tick **LangGraph engine** to re-run the same PR through
+the LangGraph skeleton and confirm the output is identical.
+
+---
+
+## 2. What the system does
+
+Each PR bundle flows through a fixed, deterministic sequence of eight agents (A → H) plus an
+ERP/tracker stub:
+
+| Agent | Responsibility | Key output(s) |
+|-------|----------------|---------------|
+| **A** | Intake & Context / Gatekeeper (manifest validation, PR-type, idempotency hash) | `context_packet.json`, `evidence_index.json` |
+| **B** | Item / PR field extraction (digital PDF + JSON, per-field confidence & bounding boxes) | `extracted_pr.json` |
+| **C** | Budget validation against the cost-center snapshot | `budget_check.json` |
+| **D** | Vendor matching & catalogue pricing | `vendor_match.json` |
+| **E** | Compliance, approval thresholds & complex-procurement flags | `policy_check.json` |
+| **F** | Sole-source & bid-threshold checks | `sole_source_check.json`, `bid_threshold_check.json` |
+| **G** | Split-order & anomaly detection (historical PRs) | `anomaly_report.json` |
+| **H** | Exception triage, final decision & orchestration | `exceptions.md`, `approval_packet.json`, `po_draft.json`, `audit_log.md`, `metrics.json`, `run_summary.csv` |
+
+The **final decision** is one of: `auto_po`, `auto_approve`, `manual_approval`,
+`manual_review`, `buyer_clarification`, `expedited_approval`, `exception`, `blocked`.
+
+---
+
+## 3. Prerequisites
+
+- **Python 3.11 or newer.** Recommended: Python 3.12, which was used for development and verification.
+- **pip** and the ability to create a virtual environment (`venv`).
+- *(Optional)* **Docker**, only if you prefer the containerized demo.
+- *(Optional)* **Tesseract OCR**, only if you want to process *scanned* PDFs. Digital-PDF
+  parsing (PyMuPDF / pdfplumber) needs no system dependency.
+
+No external services, databases, API keys, or cloud accounts are required for the core system.
+
+---
+
+## 4. Installation
+
+```bash
+
+python -m venv .venv
+.venv\Scripts\Activate.ps1                  
+
+# 2. Install all dependencies
+pip install -r requirements.txt
+
+# 3. configure local environment 
+copy .env.example .env                            
 
 # 4. Verify the install
 python -c "import pandas, pydantic, yaml, fitz, fastapi, streamlit, pytest; print('IPRMS deps OK')"
+```
 
-# 5. Run the pipeline on a sample PR bundle
+> The optional `.env` file is **not** needed to run or demo the project. The deterministic core
+> runs fully without it, and decisions are identical whether the LLM fallback is enabled or not.
+
+---
+
+## 5. Running the pipeline (CLI)
+
+The official execution flow is the deterministic Python runner:
+
+```bash
 python pipelines/run_iprms_pipeline.py --bundle data/pr_bundles/pr_bundle_001
+```
 
-# 6. Run the tests
-pytest tests/
+Available options:
 
-# 7. Open the demo UI / API locally
+| Flag | Description |
+|------|-------------|
+| `--bundle <path>` | **(required)** Path to a PR bundle folder (must contain `manifest.yaml`). |
+| `--run-id <id>` | *(optional)* Use an explicit run id instead of an auto-generated one. |
+| `--langgraph` | *(optional)* Execute through the LangGraph skeleton instead of the direct path. Output must be identical. |
+
+Example — run a scenario through the LangGraph engine:
+
+```bash
+python pipelines/run_iprms_pipeline.py --bundle data/pr_bundles/scenario_05_emergency_sole_source --langgraph
+```
+
+Typical console output:
+
+```
+[IPRMS] run_id=RUN-20260618T150433Z-c3d29a46
+[IPRMS] run_dir=.../runs/RUN-20260618T150433Z-c3d29a46
+[IPRMS] decision=auto_po  po_status=ready_for_posting
+[IPRMS] erp_status=simulated_post_success  exceptions=0
+[IPRMS] engine=direct Python
+```
+
+All artifacts for the run are written under `runs/<run_id>/` (see
+[Run artifacts](#11-run-artifacts)).
+
+---
+
+## 6. Running the demo UI (Streamlit)
+
+The Streamlit app is the recommended way to demonstrate the project:
+
+```bash
 streamlit run app/streamlit_app.py
+```
+
+It opens at **http://localhost:8501**. From the UI you can:
+
+- Select any PR bundle / scenario from the dropdown.
+- See live `manifest.yaml` validation.
+- Click **Run pipeline** and view: the decision header (Decision / PO status / Routed to /
+  ERP), the approval packet, exceptions, PO draft, audit log, metrics, tracker payload,
+  `run_summary.csv`, and the complete list of generated artifacts.
+- Toggle **LangGraph engine** to re-run the same PR through the LangGraph skeleton and confirm
+  the result matches the direct pipeline.
+
+---
+
+## 7. Running the API (FastAPI)
+
+```bash
 uvicorn api.main:app --reload
 ```
 
-**Optional system dependency:** scanned-PDF OCR uses [Tesseract](https://github.com/tesseract-ocr/tesseract).
-Install it separately and, if it is not on your `PATH`, set `TESSERACT_CMD` in `.env`.
-Digital-PDF parsing (PyMuPDF / pdfplumber) needs no system dependency.
+The API serves at **http://localhost:8000**. Interactive Swagger docs are at
+**http://localhost:8000/docs**.
 
-## Run artifacts
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/run-pr` | Run a PR bundle. Body: `{"bundle_dir": "...", "use_langgraph": false}` |
+| `GET`  | `/runs/{run_id}` | Run summary (decision, routing, input hash, exceptions) |
+| `GET`  | `/runs/{run_id}/decision` | Full approval packet |
+| `GET`  | `/runs/{run_id}/artifacts` | List of artifacts for the run |
+| `GET`  | `/runs/{run_id}/audit-log` | Audit log (Markdown, plain text) |
+| `GET`  | `/runs/{run_id}/summary` | Validated run summary |
+| `GET`  | `/metrics` | Aggregate metrics across all runs |
 
-Every run stores all its outputs locally under `runs/<run_id>/` as JSON, Markdown and CSV,
-available for review, audit analysis, and demo reporting. The run directory is resolved from
+Example — run a bundle and read back its decision:
+
+```bash
+curl -X POST http://localhost:8000/run-pr \
+  -H "Content-Type: application/json" \
+  -d "{\"bundle_dir\": \"data/pr_bundles/pr_bundle_001\"}"
+
+curl http://localhost:8000/runs/RUN-.../decision
+```
+
+---
+
+## 8. Running with Docker (optional)
+
+Docker is **optional** — only for a self-contained local demo. The image is built on
+`python:3.12-slim`.
+
+```bash
+# Build the image
+docker build -t iprms .
+
+# Run the FastAPI service (default) on http://localhost:8000
+docker run --rm -p 8000:8000 iprms
+
+# Or run the Streamlit demo UI on http://localhost:8501
+docker run --rm -p 8501:8501 iprms \
+    streamlit run app/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+```
+
+---
+
+## 9. Running the tests
+
+```bash
+# Run the full suite (expect: 170 passed)
+pytest -q
+
+# Verbose, with test names
+pytest -v
+
+# Run a single test file
+pytest tests/test_pipeline.py
+```
+
+The suite (170 tests across 16 files) covers every agent (A–H), the Pydantic schemas, the
+end-to-end pipeline, **LangGraph parity** (same final decisions and equivalent artifacts as the
+direct path), **idempotency** (stable input hash), the API endpoints, and the controlled-LLM
+guardrails.
+
+---
+
+## 10. Built-in demo scenarios
+
+The repository ships with 12 designed scenarios plus a baseline bundle, each with a
+`manifest.yaml`, input data, and an `expected_outcome.json` oracle. They exercise every decision
+path:
+
+| Bundle | Purpose | Expected decision | Routed to |
+|--------|---------|-------------------|-----------|
+| `pr_bundle_001` | Baseline clean IT PR | `auto_po` | — |
+| `scenario_01_clean_pr` | Standard IT consumables, approved vendor, in budget | `auto_po` | — |
+| `scenario_02_non_preferred_vendor` | Non-preferred vendor without justification | `exception` | Procurement |
+| `scenario_03_same_week_threshold_anomaly` | 3 PRs same dept/week above threshold | `exception` | Compliance/Procurement |
+| `scenario_04_budget_exhausted` | Cost center budget exhausted | `blocked` | FP&A |
+| `scenario_05_emergency_sole_source` | Emergency sole-source purchase | `expedited_approval` | Expedited Approval |
+| `scenario_06_vague_item_description` | Item too vague to price | `buyer_clarification` | Buyer Clarification |
+| `scenario_07_split_order_pattern` | Same item split across 5 PRs | `exception` | Compliance Review |
+| `scenario_08_low_confidence_extraction` | Low extraction confidence | `manual_review` | Manual Review |
+| `scenario_09_small_clean_pr` | Small clean PR under threshold | `auto_approve` | — |
+| `scenario_10_framework_agreement` | Framework agreement PR | policy-driven | Configured Policy Routing |
+| `scenario_11_blanket_order` | Blanket order PR | policy-driven | Configured Policy Routing |
+| `scenario_12_multi_currency` | Multi-currency PR / PO | policy validation | Finance/Procurement |
+
+Run any of them via the CLI, the UI, or the API, e.g.:
+
+```bash
+python pipelines/run_iprms_pipeline.py --bundle data/pr_bundles/scenario_04_budget_exhausted
+```
+
+---
+
+## 11. Run artifacts
+
+Every run stores all outputs locally under `runs/<run_id>/`. The run directory is resolved from
 the repo root (see `configs/config.py` → `RUNS_DIR`), so it is always created in the same place
 regardless of the current working directory.
 
 ```
 runs/<run_id>/
-├── context_packet.json        # Agent A
-├── evidence_index.json        # Agent A
-├── extracted_pr.json          # Agent B
-├── budget_check.json          # Agent C
-├── vendor_match.json          # Agent D
-├── policy_check.json          # Agent E
-├── sole_source_check.json     # Agent F
-├── bid_threshold_check.json   # Agent F
-├── anomaly_report.json        # Agent G
-├── exceptions.md              # Agent H
-├── approval_packet.json       # Agent H
-├── po_draft.json              # Agent H
-├── audit_log.md               # Agent H
-├── metrics.json               # Agent H
-├── run_summary.csv            # Agent H
-├── tracker_payload.json       # tracker stub (if exceptions exist)
-└── erp_posting_result.json    # ERP API stub
+├── context_packet.json       
+├── evidence_index.json        
+├── extracted_pr.json         
+├── budget_check.json         
+├── vendor_match.json          
+├── policy_check.json        
+├── sole_source_check.json     
+├── bid_threshold_check.json   
+├── anomaly_report.json        
+├── exceptions.md            
+├── approval_packet.json       
+├── po_draft.json              
+├── audit_log.md               
+├── metrics.json             
+├── run_summary.csv           
+├── tracker_payload.json      
+├── llm_fallback_trace.json    
+└── erp_posting_result.json    
 ```
 
-Artifacts are written through `artifact_store.ArtifactStore`, which centralises path resolution
-and writing (`write_json` / `write_markdown` / `write_csv` / `write_run_summary`) so all agents
-use one consistent layout.
+All artifacts are written through `artifact_store.ArtifactStore`, which centralizes path
+resolution and writing so every agent uses one consistent layout.
 
-## Deployment
+---
 
-Docker is **optional**, only for a local/containerized demo. The system must also run directly
-with plain Python commands:
+## 12. Configuration — the single source of truth
+
+All procurement rules live in **`configs/policy_pack.yaml`**.
+
+It defines, among others:
+
+- `approval_thresholds` — `manager_limit`, `finance_limit`, `director_limit`
+- `tolerances` — catalogue price variance %, minimum extraction confidence
+- `routing` — where each exception type is sent
+- `bid_rules` — bid threshold amount and minimum required bids
+- complex-procurement flags, multi-currency rules, and PR-type classification
+
+**Demonstration of config-driven behaviour:** change `manager_limit` from `1000` to `100`,
+re-run `pr_bundle_001` (amount = 450 EUR), and the decision flips from `auto_po` to
+`manual_approval` routed to Finance. Revert the value and it returns to
+`auto_po`. This proves the policy pack drives every decision.
+
+---
+
+## 13. Architecture & design guarantees
+
+- **Deterministic core.** All business decisions (budget, vendor, compliance, sole-source,
+  anomaly, routing, PO) are deterministic Python / Pydantic / Pandas, so runs are reproducible
+  and idempotent.
+- **Idempotency.** Agent A computes a SHA-256 `input_hash` over the bundle, manifest and policy
+  pack. Re-running identical input yields the same hash and `idempotency_check: passed`.
+- **LangGraph parity.** LangGraph is an *optional internal skeleton* that wraps the same A→H
+  functions for flow/state/audit. It produces the **same final decisions and equivalent
+  artifacts** as the direct Python pipeline; parity tests verify that the skeleton calls the
+  same deterministic agent functions (artifacts are byte-identical when run with the same fixed
+  run_id and normalized runtime fields). The project runs fully without LangGraph.
+- **Controlled LLM boundary.** LangChain/LLM is allowed at **exactly two advisory points**
+  (Agent A PR-type classification, Agent B vague/unclear extraction), is **off by default**, and
+  **never** decides budget, vendor, compliance, split-order, routing, or PO. With it disabled,
+  decisions are identical.
+
+---
+
+## 14. Repository structure
 
 ```
-GitHub repo → Local Python environment or Docker container
-            → FastAPI / Streamlit UI → deterministic Python pipeline
-            → run artifacts + JSON / Markdown / CSV outputs
+iprms-intelligent-purchase-requisition/
+├── agents/       
+├── api/          
+├── app/          
+├── configs/       
+  config.py
+├── data/         
+  manifest.yaml 
+  expected_outcome.json
+├── graph/        
+  state.py
+  nodes.py
+  workflow.py
+├── llm/           
+├── pipelines/    
+├── schemas/       
+├── runs/          
+├── tests/         
+├── Dockerfile     
+├── requirements.txt
+└── README.md
 ```
 
-```bash
-# Build the local image
-docker build -t iprms .
+---
 
-# Run the FastAPI service (default CMD) on http://localhost:8000
-docker run --rm -p 8000:8000 iprms
-
-# Run the Streamlit demo UI instead, on http://localhost:8501
-docker run --rm -p 8501:8501 iprms \
-    streamlit run app/streamlit_app.py --server.port 8501 --server.address 0.0.0.0
-```
-
-> Azure Container Apps / cloud deployment is **not** used. Docker is only for a local/containerized
-> demo; the same app runs directly with `uvicorn api.main:app` / `streamlit run app/streamlit_app.py`.
-
-## Team
+## 15. Team
 
 | Engineer | Role |
 |----------|------|
 | Dafina | Platform & Data Integration Engineer |
 | Yllka | PR Extraction & Matching Engineer |
 | Rozafa | Compliance, Risk & Orchestration Engineer |
+</content>
+</invoke>
