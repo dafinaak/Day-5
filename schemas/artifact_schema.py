@@ -1,12 +1,3 @@
-"""Compliance & risk artifact schemas (IPRMS).
-
-Pydantic models for the compliance/risk run artifacts produced by Agents E/F/G:
-  * Agent E -> policy_check.json (PolicyCheck)
-  * Agent F -> sole_source_check.json / bid_threshold_check.json (added in Task 25)
-  * Agent G -> anomaly_report.json (added in Task 26)
-
-Kept separate from pr_schema.py (extraction/matching, Agents B/C/D) per plan §3.
-"""
 from __future__ import annotations
 
 from typing import List

@@ -1,9 +1,3 @@
-"""Unified Findings Schema (IPRMS).
-
-Every agent (A–H) reports issues as `Finding` objects in ONE consistent shape,
-so Agent H can merge, deduplicate, route, and audit them uniformly.
-See plani.pdf §5 for the canonical field list.
-"""
 from __future__ import annotations
 
 from enum import Enum

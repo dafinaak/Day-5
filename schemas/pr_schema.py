@@ -1,11 +1,3 @@
-"""Extraction & matching schemas (IPRMS).
-
-Pydantic models for the outputs of Agent B (extracted_pr.json),
-Agent C (budget_check.json) and Agent D (vendor_match.json), plus the
-PR-type classification fields (Agent A) and the controlled-LLM fallback trace
-(llm_fallback_trace.json). Consistent with the run artifacts in plani.pdf §6/§7
-and the controlled-LLM boundary in §4.1.
-"""
 from __future__ import annotations
 
 from enum import Enum

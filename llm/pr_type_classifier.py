@@ -1,14 +1,3 @@
-"""Agent A PR-type classification fallback (controlled LLM, plan §4.1).
-
-Used ONLY when deterministic metadata rules cannot classify the PR type. The LLM
-may only *suggest* one of standard / emergency / capex; it never decides routing,
-approval, budget, vendor, compliance, anomaly, or PO rules.
-
-Deterministic-safe: returns None when the fallback is disabled (default) or when
-no model/credentials are configured — so the pipeline stays deterministic. A real
-suggestion requires IPRMS_LLM_FALLBACK_ENABLED + a configured model (e.g.
-OPENAI_API_KEY, IPRMS_LLM_MODEL).
-"""
 from __future__ import annotations
 
 import os
