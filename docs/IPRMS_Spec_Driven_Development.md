@@ -1,9 +1,9 @@
-# IPRMS – Spec-Driven Development
+# IPRMS - Spec-Driven Development
 
 This document explains how the **Intelligent Purchase Requisition Management System
 (IPRMS)** follows **Spec-Driven Development (SDD)**, and how it maps to the Day 5
 Kaggle AI Agents Intensive theme:
-*"Spec-Driven Production Grade Development in the Age of Vibe Coding."*
+"Spec-Driven Production Grade Development in the Age of Vibe Coding."
 
 ---
 
@@ -25,7 +25,7 @@ and **reproducible** (the same inputs and specs always yield the same outputs).
 
 ## 2. Source-of-Truth Artifacts
 
-The following artifacts — not the code — define what IPRMS is allowed to do:
+The following artifacts - not the code - define what IPRMS is allowed to do:
 
 | Artifact | Role as source of truth |
 | --- | --- |
@@ -39,7 +39,7 @@ The following artifacts — not the code — define what IPRMS is allowed to do:
 | **Gherkin scenarios** (`features/pr_processing.feature`) | Human-readable behavior specs describing intended pipeline outcomes. |
 
 Because these artifacts are versioned, a change in behavior **requires a change in a
-spec**, reviewed through normal source control — not an undocumented code tweak.
+spec**, reviewed through normal source control - not an undocumented code tweak.
 
 ---
 
@@ -61,7 +61,7 @@ exactly.
 
 ## 4. Role of LLMs / LangChain / LangGraph
 
-IPRMS may use **LLMs, LangChain, or LangGraph** to *support* the pipeline — for
+IPRMS may use **LLMs, LangChain, or LangGraph** to *support* the pipeline - for
 example, to help extract structured fields from messy documents (Agent B) or to
 orchestrate the flow of agents (Agent H).
 
@@ -71,8 +71,8 @@ However, these components are **assistive, not authoritative**:
   anything malformed or low-confidence.
 - Orchestration may be expressed in LangGraph; the *decisions* inside each node are
   deterministic, rule-based checks driven by the config artifacts.
-- **Final business decisions** — approve/route, budget pass/fail, vendor preference,
-  bid-threshold, sole-source, split-order — are always made by deterministic rules,
+- **Final business decisions** - approve/route, budget pass/fail, vendor preference,
+  bid-threshold, sole-source, split-order - are always made by deterministic rules,
   never by a probabilistic model.
 
 This keeps the "intelligent" parts of IPRMS confined to perception and routing
@@ -81,7 +81,7 @@ reproducible and explainable.
 
 ---
 
-## 5. Day 5 → IPRMS Mapping
+## 5. Day 5 -> IPRMS Mapping
 
 The Day 5 Expense Agent codelab concepts map directly onto IPRMS concepts:
 
@@ -104,52 +104,39 @@ IPRMS implements the same production pattern taught in Day 5, locally and
 deterministically:
 
 ```
-            ┌─────────────────────┐
-            │   PR submission     │  (PR bundle + manifest.yaml)
-            │  "PR submitted"     │  event-driven input concept
-            └──────────┬──────────┘
-                       │
-                       ▼
-            ┌─────────────────────┐
-            │   IPRMS pipeline    │  (LangGraph orchestration)
-            └──────────┬──────────┘
-                       │
-                       ▼
-   ┌───────────────────────────────────────────────┐
-   │  Agents A → H                                   │
-   │   A Intake & Context     E Policy Compliance    │
-   │   B PR Extraction        F Sole-Source / Bid    │
-   │   C Budget Validation    G Split-Order/Anomaly  │
-   │   D Vendor Matching      H Exception Triage     │
-   └──────────────────────┬────────────────────────┘
-                          │
-                          ▼
-            ┌─────────────────────┐
-            │ Deterministic checks │  (policy_pack / routing_rules /
-            │  rule-based decision │   tolerance_settings)
-            └──────────┬──────────┘
-                       │
-          ┌────────────┴────────────┐
-          ▼                         ▼
- ┌─────────────────┐      ┌──────────────────────┐
- │   PO draft      │      │  Exception route      │
- │ (auto-approved) │      │ (FP&A/Procurement/Legal)
- └────────┬────────┘      └──────────┬───────────┘
-          │                          │
-          └────────────┬─────────────┘
-                       ▼
-            ┌─────────────────────┐
-            │   Audit artifacts    │  audit_log / evidence_index / metrics
-            └──────────┬──────────┘
-                       ▼
-            ┌─────────────────────┐
-            │ Dashboard / monitor  │  Exception review dashboard
-            └─────────────────────┘
+  PR submission  (PR bundle + manifest.yaml, "PR submitted" event)
+        |
+        v
+  IPRMS pipeline  (LangGraph orchestration)
+        |
+        v
+  Agents A -> H
+    A Intake & Context     E Policy Compliance
+    B PR Extraction        F Sole-Source / Bid
+    C Budget Validation    G Split-Order / Anomaly
+    D Vendor Matching      H Exception Triage
+        |
+        v
+  Deterministic checks  (policy_pack / routing_rules / tolerance_settings)
+        |
+        +-------------------------+
+        |                         |
+        v                         v
+  PO draft                  Exception route
+  (auto-approved)           (FP&A / Procurement / Legal)
+        |                         |
+        +------------+------------+
+                     |
+                     v
+  Audit artifacts  (audit_log / evidence_index / metrics)
+                     |
+                     v
+  Dashboard / monitoring  (exception review dashboard)
 ```
 
-**Flow summary:** PR submission → pipeline → agents A–H → deterministic checks →
-PO draft *or* exception route → audit artifacts → dashboard / monitoring.
+**Flow summary:** PR submission -> pipeline -> agents A-H -> deterministic checks ->
+PO draft *or* exception route -> audit artifacts -> dashboard / monitoring.
 
-This mirrors the Day 5 cloud reference architecture (event → agent runtime →
-threshold decision → auto-approve or human review → logging/observability) while
+This mirrors the Day 5 cloud reference architecture (event -> agent runtime ->
+threshold decision -> auto-approve or human review -> logging/observability) while
 keeping IPRMS fully deterministic and runnable without any cloud billing.

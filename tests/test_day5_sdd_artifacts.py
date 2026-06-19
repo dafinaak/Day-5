@@ -1,4 +1,4 @@
-"""Day 5 – Spec-Driven Development artifact checks.
+"""Day 5 - Spec-Driven Development artifact checks.
 
 These tests are documentation/spec guards only. They verify that the Day 5
 artifacts exist and contain the expected content. They do NOT touch or change
@@ -38,7 +38,7 @@ def test_feature_file_exists():
 
 def test_readme_has_day5_section():
     text = README.read_text(encoding="utf-8")
-    assert "Day 5 – Spec-Driven Production Readiness" in text
+    assert "Day 5 - Spec-Driven Production Readiness" in text
 
 
 def test_feature_file_contains_required_scenarios():

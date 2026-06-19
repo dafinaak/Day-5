@@ -1,4 +1,4 @@
-# IPRMS — Intelligent Purchase Requisition Management System
+# IPRMS - Intelligent Purchase Requisition Management System
 
 IPRMS is a **standalone, deterministic, Python-based 8-agent system** for processing Purchase
 Requisitions (PRs). For every PR bundle it validates budget and vendor data, applies a
@@ -26,7 +26,7 @@ The system runs entirely on a local machine (or a single Docker container).
 9. [Running the tests](#9-running-the-tests)
 10. [Built-in demo scenarios](#10-built-in-demo-scenarios)
 11. [Run artifacts](#11-run-artifacts)
-12. [Configuration — the single source of truth](#12-configuration--the-single-source-of-truth)
+12. [Configuration - the single source of truth](#12-configuration--the-single-source-of-truth)
 13. [Architecture & design guarantees](#13-architecture--design-guarantees)
 14. [Repository structure](#14-repository-structure)
 
@@ -60,7 +60,7 @@ the LangGraph skeleton and confirm the output is identical.
 
 ## 2. What the system does
 
-Each PR bundle flows through a fixed, deterministic sequence of eight agents (A → H) plus an
+Each PR bundle flows through a fixed, deterministic sequence of eight agents (A -> H) plus an
 ERP/tracker stub:
 
 | Agent | Responsibility | Key output(s) |
@@ -129,7 +129,7 @@ Available options:
 | `--run-id <id>` | *(optional)* Use an explicit run id instead of an auto-generated one. |
 | `--langgraph` | *(optional)* Execute through the LangGraph skeleton instead of the direct path. Output must be identical. |
 
-Example — run a scenario through the LangGraph engine:
+Example - run a scenario through the LangGraph engine:
 
 ```bash
 python pipelines/run_iprms_pipeline.py --bundle data/pr_bundles/scenario_05_emergency_sole_source --langgraph
@@ -189,7 +189,7 @@ The API serves at **http://localhost:8000**. Interactive Swagger docs are at
 | `GET`  | `/runs/{run_id}/summary` | Validated run summary |
 | `GET`  | `/metrics` | Aggregate metrics across all runs |
 
-Example — run a bundle and read back its decision:
+Example - run a bundle and read back its decision:
 
 ```bash
 curl -X POST http://localhost:8000/run-pr \
@@ -203,7 +203,7 @@ curl http://localhost:8000/runs/RUN-.../decision
 
 ## 8. Running with Docker (optional)
 
-Docker is **optional** — only for a self-contained local demo. The image is built on
+Docker is **optional** - only for a self-contained local demo. The image is built on
 `python:3.12-slim`.
 
 ```bash
@@ -233,7 +233,7 @@ pytest -v
 pytest tests/test_pipeline.py
 ```
 
-The suite (170 tests across 16 files) covers every agent (A–H), the Pydantic schemas, the
+The suite (170 tests across 16 files) covers every agent (A-H), the Pydantic schemas, the
 end-to-end pipeline, **LangGraph parity** (same final decisions and equivalent artifacts as the
 direct path), **idempotency** (stable input hash), the API endpoints, and the controlled-LLM
 guardrails.
@@ -248,8 +248,8 @@ path:
 
 | Bundle | Purpose | Expected decision | Routed to |
 |--------|---------|-------------------|-----------|
-| `pr_bundle_001` | Baseline clean IT PR | `auto_po` | — |
-| `scenario_01_clean_pr` | Standard IT consumables, approved vendor, in budget | `auto_po` | — |
+| `pr_bundle_001` | Baseline clean IT PR | `auto_po` | - |
+| `scenario_01_clean_pr` | Standard IT consumables, approved vendor, in budget | `auto_po` | - |
 | `scenario_02_non_preferred_vendor` | Non-preferred vendor without justification | `exception` | Procurement |
 | `scenario_03_same_week_threshold_anomaly` | 3 PRs same dept/week above threshold | `exception` | Compliance/Procurement |
 | `scenario_04_budget_exhausted` | Cost center budget exhausted | `blocked` | FP&A |
@@ -257,7 +257,7 @@ path:
 | `scenario_06_vague_item_description` | Item too vague to price | `buyer_clarification` | Buyer Clarification |
 | `scenario_07_split_order_pattern` | Same item split across 5 PRs | `exception` | Compliance Review |
 | `scenario_08_low_confidence_extraction` | Low extraction confidence | `manual_review` | Manual Review |
-| `scenario_09_small_clean_pr` | Small clean PR under threshold | `auto_approve` | — |
+| `scenario_09_small_clean_pr` | Small clean PR under threshold | `auto_approve` | - |
 | `scenario_10_framework_agreement` | Framework agreement PR | policy-driven | Configured Policy Routing |
 | `scenario_11_blanket_order` | Blanket order PR | policy-driven | Configured Policy Routing |
 | `scenario_12_multi_currency` | Multi-currency PR / PO | policy validation | Finance/Procurement |
@@ -273,29 +273,29 @@ python pipelines/run_iprms_pipeline.py --bundle data/pr_bundles/scenario_04_budg
 ## 11. Run artifacts
 
 Every run stores all outputs locally under `runs/<run_id>/`. The run directory is resolved from
-the repo root (see `configs/config.py` → `RUNS_DIR`), so it is always created in the same place
+the repo root (see `configs/config.py` -> `RUNS_DIR`), so it is always created in the same place
 regardless of the current working directory.
 
 ```
 runs/<run_id>/
-├── context_packet.json       
-├── evidence_index.json        
-├── extracted_pr.json         
-├── budget_check.json         
-├── vendor_match.json          
-├── policy_check.json        
-├── sole_source_check.json     
-├── bid_threshold_check.json   
-├── anomaly_report.json        
-├── exceptions.md            
-├── approval_packet.json       
-├── po_draft.json              
-├── audit_log.md               
-├── metrics.json             
-├── run_summary.csv           
-├── tracker_payload.json      
-├── llm_fallback_trace.json    
-└── erp_posting_result.json    
++-- context_packet.json       
++-- evidence_index.json        
++-- extracted_pr.json         
++-- budget_check.json         
++-- vendor_match.json          
++-- policy_check.json        
++-- sole_source_check.json     
++-- bid_threshold_check.json   
++-- anomaly_report.json        
++-- exceptions.md            
++-- approval_packet.json       
++-- po_draft.json              
++-- audit_log.md               
++-- metrics.json             
++-- run_summary.csv           
++-- tracker_payload.json      
++-- llm_fallback_trace.json    
+`-- erp_posting_result.json    
 ```
 
 All artifacts are written through `artifact_store.ArtifactStore`, which centralizes path
@@ -303,16 +303,16 @@ resolution and writing so every agent uses one consistent layout.
 
 ---
 
-## 12. Configuration — the single source of truth
+## 12. Configuration - the single source of truth
 
 All procurement rules live in **`configs/policy_pack.yaml`**.
 
 It defines, among others:
 
-- `approval_thresholds` — `manager_limit`, `finance_limit`, `director_limit`
-- `tolerances` — catalogue price variance %, minimum extraction confidence
-- `routing` — where each exception type is sent
-- `bid_rules` — bid threshold amount and minimum required bids
+- `approval_thresholds` - `manager_limit`, `finance_limit`, `director_limit`
+- `tolerances` - catalogue price variance %, minimum extraction confidence
+- `routing` - where each exception type is sent
+- `bid_rules` - bid threshold amount and minimum required bids
 - complex-procurement flags, multi-currency rules, and PR-type classification
 
 **Demonstration of config-driven behaviour:** change `manager_limit` from `1000` to `100`,
@@ -329,7 +329,7 @@ re-run `pr_bundle_001` (amount = 450 EUR), and the decision flips from `auto_po`
   and idempotent.
 - **Idempotency.** Agent A computes a SHA-256 `input_hash` over the bundle, manifest and policy
   pack. Re-running identical input yields the same hash and `idempotency_check: passed`.
-- **LangGraph parity.** LangGraph is an *optional internal skeleton* that wraps the same A→H
+- **LangGraph parity.** LangGraph is an *optional internal skeleton* that wraps the same A->H
   functions for flow/state/audit. It produces the **same final decisions and equivalent
   artifacts** as the direct Python pipeline; parity tests verify that the skeleton calls the
   same deterministic agent functions (artifacts are byte-identical when run with the same fixed
@@ -345,48 +345,48 @@ re-run `pr_bundle_001` (amount = 450 EUR), and the decision flips from `auto_po`
 
 ```
 iprms-intelligent-purchase-requisition/
-├── agents/       
-├── api/          
-├── app/          
-├── configs/       
++-- agents/       
++-- api/          
++-- app/          
++-- configs/       
   config.py
-├── data/         
++-- data/         
   manifest.yaml 
   expected_outcome.json
-├── graph/        
++-- graph/        
   state.py
   nodes.py
   workflow.py
-├── llm/           
-├── pipelines/    
-├── schemas/       
-├── runs/          
-├── tests/         
-├── Dockerfile     
-├── requirements.txt
-└── README.md
++-- llm/           
++-- pipelines/    
++-- schemas/       
++-- runs/          
++-- tests/         
++-- Dockerfile     
++-- requirements.txt
+`-- README.md
 ```
 
 ---
 
-## 15. Day 5 – Spec-Driven Production Readiness
+## 15. Day 5 - Spec-Driven Production Readiness
 
-As part of the Kaggle AI Agents Intensive (Day 5 – *Spec-Driven Production Grade
+As part of the Kaggle AI Agents Intensive (Day 5 - *Spec-Driven Production Grade
 Development in the Age of Vibe Coding*), IPRMS has been documented as a spec-driven,
 production-ready system:
 
-- **Spec-Driven Development mapping** — IPRMS treats specs, configs, schemas, tests,
+- **Spec-Driven Development mapping** - IPRMS treats specs, configs, schemas, tests,
   and audit artifacts as the source of truth (not code). See
   [docs/IPRMS_Spec_Driven_Development.md](docs/IPRMS_Spec_Driven_Development.md).
-- **Gherkin behavior specs** — human-readable, deterministic pipeline scenarios were
+- **Gherkin behavior specs** - human-readable, deterministic pipeline scenarios were
   added in [features/pr_processing.feature](features/pr_processing.feature).
-- **Production-readiness documentation** — ready-to-paste Kaggle notebook content and
+- **Production-readiness documentation** - ready-to-paste Kaggle notebook content and
   the IPRMS production architecture are in
   [docs/Day5_Kaggle_Notebook_Content.md](docs/Day5_Kaggle_Notebook_Content.md).
-- **Optional Google Cloud codelabs** — the Day 5 cloud deployment codelabs were
+- **Optional Google Cloud codelabs** - the Day 5 cloud deployment codelabs were
   **reviewed but not executed**, because they require a billing-enabled Google Cloud
   project. No cloud deployment was attempted and no billing services were created.
-- **Determinism preserved** — the core IPRMS pipeline remains fully deterministic:
+- **Determinism preserved** - the core IPRMS pipeline remains fully deterministic:
   *same input bundle + same configs = same outputs.* No business logic was changed.
 
 </content>
