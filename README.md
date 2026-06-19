@@ -29,7 +29,6 @@ The system runs entirely on a local machine (or a single Docker container).
 12. [Configuration — the single source of truth](#12-configuration--the-single-source-of-truth)
 13. [Architecture & design guarantees](#13-architecture--design-guarantees)
 14. [Repository structure](#14-repository-structure)
-15. [Team](#15-team)
 
 ---
 
@@ -370,12 +369,25 @@ iprms-intelligent-purchase-requisition/
 
 ---
 
-## 15. Team
+## 15. Day 5 – Spec-Driven Production Readiness
 
-| Engineer | Role |
-|----------|------|
-| Dafina | Platform & Data Integration Engineer |
-| Yllka | PR Extraction & Matching Engineer |
-| Rozafa | Compliance, Risk & Orchestration Engineer |
+As part of the Kaggle AI Agents Intensive (Day 5 – *Spec-Driven Production Grade
+Development in the Age of Vibe Coding*), IPRMS has been documented as a spec-driven,
+production-ready system:
+
+- **Spec-Driven Development mapping** — IPRMS treats specs, configs, schemas, tests,
+  and audit artifacts as the source of truth (not code). See
+  [docs/IPRMS_Spec_Driven_Development.md](docs/IPRMS_Spec_Driven_Development.md).
+- **Gherkin behavior specs** — human-readable, deterministic pipeline scenarios were
+  added in [features/pr_processing.feature](features/pr_processing.feature).
+- **Production-readiness documentation** — ready-to-paste Kaggle notebook content and
+  the IPRMS production architecture are in
+  [docs/Day5_Kaggle_Notebook_Content.md](docs/Day5_Kaggle_Notebook_Content.md).
+- **Optional Google Cloud codelabs** — the Day 5 cloud deployment codelabs were
+  **reviewed but not executed**, because they require a billing-enabled Google Cloud
+  project. No cloud deployment was attempted and no billing services were created.
+- **Determinism preserved** — the core IPRMS pipeline remains fully deterministic:
+  *same input bundle + same configs = same outputs.* No business logic was changed.
+
 </content>
 </invoke>
